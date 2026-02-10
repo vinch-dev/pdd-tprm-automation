@@ -38,7 +38,7 @@ Sub Execute_SAP_Extraction_Framework()
     Session.findById("wnd[1]").sendVKey 7 ' Start Download
 
     ' Trigger Python Transformation with CLI Arguments
-    Dim cmd As String: cmd = "python.exe ""C:\Scripts\processor.py"" """ & folderPath & "\" & fileName & """"
+    Dim cmd As String: cmd = "cmd.exe /k ""python.exe ""C:\Scripts\processor.py"" """ & folderPath & "\" & fileName & """"""
     CreateObject("WScript.Shell").Run cmd, 1, False
 
 CleanExit:
@@ -47,4 +47,5 @@ CleanExit:
 
 ErrorHandler:
     MsgBox "Automation Halted: " & Err.Description & vbCrLf & "Check SAP Scripting permissions.", vbCritical
+
 End Sub
