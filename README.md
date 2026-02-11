@@ -40,7 +40,7 @@ graph TD
 * **Accuracy:** Eliminated copy-paste errors in sensitive pricing.
 * **Compliance:** Ensured real-time notification for non-agreed rates.
 
-##Project Roadmap & Future Enhancements
+## Project Roadmap & Future Enhancements
 ​This framework is designed for modular growth. Current development is focused on scaling data volume and diversifying input sources:
 Phase 1 (Completed): Core ERP-to-Reporting Pipeline. Developed logic for data merging, pricing validation, and automated email drafting with 100% data integrity.
 Phase 2 (In Development): DuckDB Integration. Migrating local storage from flat files to DuckDB to enable high-speed analytical queries on multi-year procurement datasets.
