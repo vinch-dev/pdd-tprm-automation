@@ -16,7 +16,7 @@ Sub Execute_SAP_Extraction_Framework()
     Set Session = Connection.Children(0)
 
     ' Transaction Navigation
-    Session.findById("wnd[0]/tbar[0]/okcd").Text = "Z_ERP_REPORT_CODE"
+    Session.findById("wnd[0]/tbar[0]/okcd").Text = "Z_INTERNAL_REPORT"
     Session.findById("wnd[0]").sendVKey 0
 
     ' Handling Multi-Value Selection Popups (Your specific logic)
@@ -49,3 +49,4 @@ ErrorHandler:
     MsgBox "Automation Halted: " & Err.Description & vbCrLf & "Check SAP Scripting permissions.", vbCritical
 
 End Sub
+
