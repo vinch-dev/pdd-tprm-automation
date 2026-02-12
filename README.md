@@ -20,7 +20,7 @@ graph TD
         E -->|No| H(Pricing Logic Check)
     end
     subgraph "Compliance & Output"
-        H --> I{Tariff Available?}
+        H --> I{Tariff, Historical PO Rate Available?}
         I -->|Yes| J[Apply Price]
         I -->|No| K[Flag for Manual Review]
         J --> L[Final Excel Review]
@@ -42,10 +42,16 @@ graph TD
 
 ## Project Roadmap & Future Enhancements
 ​This framework is designed for modular growth. Current development is focused on scaling data volume and diversifying input sources:
+
 Phase 1 (Completed): Core ERP-to-Reporting Pipeline. Developed logic for data merging, pricing validation, and automated email drafting with 100% data integrity.
-Phase 2 (In Development): DuckDB Integration. Migrating local storage from flat files to DuckDB to enable high-speed analytical queries on multi-year procurement datasets.
-Phase 3 (Upcoming): OCR Module. Implementing Tesseract-based OCR to ingest digital assessments and quotations into the digital pipeline.
-Phase 4 (Exploratory): Local LLM Agent. Testing Ollama/AzureAI integration via REST API for automated document analysis on multi-year sourcing datasets.
+
+Phase 2 (Completed): DuckDB Integration. Migrating local storage from flat files to DuckDB to enable high-speed analytical queries on multi-year procurement datasets.
+
+Phase 3 (In Development): TF-IDF logic implementation. Improvement of fuzzy match for multi-year procurement datasets. 
+
+Phase 4 (Upcoming): OCR Module. Implementing Tesseract-based OCR to ingest digital assessments and quotations into the digital pipeline.
+
+Phase 5 (Exploratory): Local LLM Agent. Testing Ollama/AzureAI integration via REST API for automated document analysis on multi-year sourcing datasets.
 
 ---
 *Note: This repository contains logic frameworks and pseudocode to demonstrate technical proficiency. Proprietary company code is not included.*
