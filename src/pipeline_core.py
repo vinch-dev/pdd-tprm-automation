@@ -1,97 +1,124 @@
+import polars as pl
 import pandas as pd
-import numpy as np
-import win32com.client as win32
+import duckdb
 import sys
 import time
-import os
-import re
+import re 
+import win32com.client as win32
+from pathlib import Path
 
+# --- Configuration & Path Setup ---
 if len(sys.argv) < 2:
-    print("Error: No file path detected from VBA.")
+    _ = input("Error: Missing input file.\nUsage: script.py <path_to_file>")
     sys.exit(1)
 
-filepath_excel = sys.argv[1]
-filename_excel = os.path.basename(filepath_excel)
-filepath_rate_ref = r"C:\Data\Tariff_Master_2025.xlsx"
-target_folder = r"C:\Data\Processed_Output"
-targetpath_excel = os.path.join(target_folder, filename_excel)
+filepath_input = Path(sys.argv[1]).resolve()
+filename_input = filepath_input.name
 
-# Error Loop check
+res_folder = Path(r"C:\Automation\Resources")
+db_path = res_folder / "Historical_Transaction_Cache.db"
+master_tariff_path = res_folder / "Master_Tariff_Rate.xlsx"
+
+output_folder = Path(r"C:\Automation\Output\Processed_PR")
+output_folder.mkdir(parents=True, exist_ok=True)
+targetpath_excel = output_folder / filename_input
+
+# --- Pre-Process Check (Ensure Source is Closed) 
 try:
-    ExcelApp_stat = win32.GetActiveObject("Excel.Application")
-    app_checker = 0
-    while app_checker == 0:
-        for Workbook_op in ExcelApp_stat.Workbooks:
-            if Workbook_op.Name == filename_excel:
-                _ = input(f"Workbook {filename_excel} is open.\nPlease Close and press Enter to continue:")
-                app_checker = 0
-                break
-        else:
-            app_checker = 1
-except:
-    pass
+    excel_app = win32.GetActiveObject("Excel.Application")
+    for workbook in excel_app.Workbooks:
+        if workbook.Name == filename_input:
+            _ = input(f"Action Required: '{filename_input}' is open. Please close it and press Enter to start processing:")
+            break
+except Exception:
+    pass 
 
-# Data processing
-print(f"Processing {filename_excel}...")
-time.sleep(2) 
+# --- Data Processing (Polars + DuckDB) ---
+print("Executing Data Processing & Fuzzy Matching...")
+df_tariff = pl.read_excel(master_tariff_path, engine="calamine")
+df_source = pl.read_excel(filepath_input, engine="calamine")
 
-excel_PR = pd.read_excel(filepath_excel).replace(np.nan, "")
-Pipe_tariff = pd.read_excel(filepath_rate_ref).replace(np.nan, "")
+df_initial_match = df_source.join(df_tariff, on=['Description 1', 'Unit of Measure'], how="left").fill_null("")
 
-excel_PR = pd.merge(excel_PR, Pipe_tariff, on=['Description 1', 'Unit of Measure'], how="left")
-excel_PR.to_excel(targetpath_excel, index=False)
-
-# Open target for manual review
-ExcelApp_stat = win32.Dispatch("Excel.Application")
-ExcelApp_stat.Visible = True
-ExcelApp_stat.Workbooks.Open(targetpath_excel)
-
-# 2nd Error loop check xlsx open
-app_checker = 0
-while app_checker == 0:
+if db_path.exists():
+    conn = duckdb.connect(str(db_path), read_only=True)
+    conn.register("current_batch", df_initial_match)
+    fuzzy_query = """
+        WITH unique_items AS (SELECT DISTINCT "Description 1" AS item_desc FROM current_batch),
+        historical_matches AS (
+            SELECT 
+                u.item_desc,
+                substring(string_agg(COALESCE(CAST(h."Doc_Number" AS VARCHAR), 'N/A') || ' | ' || ' (' || COALESCE(CAST(h."Unit_Price" AS VARCHAR), '0') || ')', ' || ' ORDER BY h."Doc_Number" DESC), 1, 5000) AS match_history
+            FROM unique_items u
+            JOIN historical_records h ON jaccard(lower(u.item_desc), lower(h."Historical_Desc")) > 0.6
+            GROUP BY u.item_desc
+        )
+        SELECT c.*, m.match_history AS "Historical_Reference_Logs"
+        FROM current_batch c
+        LEFT JOIN historical_matches m ON c."Description 1" = m.item_desc
+    """
     try:
-        is_still_open = any(wb.Name == filename_excel for wb in ExcelApp_stat.Workbooks)
-        if is_still_open:
-            _ = input(f"REVIEW MODE: Please close {filename_excel} to trigger Outlook MAPI...")
-            app_checker = 0
-        else:
-            app_checker = 1
+        final_df = conn.sql(fuzzy_query).pl().fill_null("")
     except:
-        app_checker = 1
+        final_df = df_initial_match
+    finally:
+        conn.close()
+else:
+    final_df = df_initial_match
 
-# --- OUTLOOK Mail Draft ---
-print("Initiating Outlook Mail...")
+# --- 4. Export for Audit ---
+final_df.write_excel(targetpath_excel)
+print(f"File saved to: {targetpath_excel}")
+
+# --- AUDIT MODE: Mandatory Review Loop ---
+print("Opening file for Manual Audit...")
 try:
-    # Indentation fixed: Metadata extraction now inside try block
-    proj_code = str(excel_PR['Project code'].dropna().unique()[0])
-    pr_no = ','.join(excel_PR['Purchase Requisition'].dropna().astype(str).unique())
-    vendor_name = str(excel_PR['Name of Desired Supplier'].dropna().unique()[0])
+    excel_ui = win32.gencache.EnsureDispatch('Excel.Application')
+    excel_ui.Workbooks.Open(str(targetpath_excel))
+    excel_ui.Visible = True
 
-    # Stylize HTML Table for Outlook
-    df_body = excel_PR[['Description 3', 'Quantity requested', 'Unit of Measure', 'Description 1', 'Rate_Det']]
-    html_table = df_body.to_html(index=False)
+    # This loop forces the script to wait until the Auditor closes the specific file
+    audit_complete = False
+    while not audit_complete:
+        audit_complete = True 
+        try:
+            for wb in excel_ui.Workbooks:
+                if wb.Name == filename_input:
+                    _ = input(f"AUDIT IN PROGRESS: Please close '{filename_input}' to trigger Outlook drafting...")
+                    audit_complete = False 
+                    break
+        except Exception:
+            audit_complete = True
+except Exception as e:
+    print(f"Audit Launch Error: {e}")
+
+# --- 6. OUTLOOK Mail Draft (Post-Audit) ---
+print("Audit confirmed. Initiating Outlook Mail...")
+try:
+    df_pd = final_df.to_pandas()
+
+    proj_code = str(df_pd['Project code'].dropna().unique()[0]) if 'Project code' in df_pd.columns else "N/A"
+    pr_no = ', '.join(df_pd['Purchase Requisition'].dropna().astype(str).unique())
+    vendor_name = str(df_pd['Name of Desired Supplier'].dropna().unique()[0]) if 'Name of Desired Supplier' in df_pd.columns else "Vendor"
+
+    email_cols = ['Description 3', 'Quantity requested', 'Unit of Measure', 'Description 1']
+    available_cols = [c for c in email_cols if c in df_pd.columns]
+    html_table = df_pd[available_cols].to_html(index=False)
     
-    # Apply "Bulletproof" table styling
-    pattern = re.compile(r'<table.*?>')
-    styled_tag = '<table cellspacing="0" cellpadding="8" style="border: 1px solid black; border-collapse: collapse; width: 100%;">'
-    html_table = re.sub(pattern, styled_tag, html_table)
+    # CSS Styling
+    styled_tag = '<table cellspacing="0" cellpadding="8" style="border: 1px solid black; border-collapse: collapse; width: 100%; font-family: Calibri;">'
+    html_table = re.sub(re.compile(r'<table.*?>'), styled_tag, html_table)
 
-    # Trigger Outlook COM (Redundancy removed)
     outlook = win32.Dispatch("Outlook.Application")
     new_mail = outlook.CreateItem(0)
-    
     new_mail.Subject = f"Work Award: {proj_code} - {pr_no}"
     new_mail.To = "vendor_email@example.com" 
-    new_mail.HTMLBody = f"""
-    <p>Hi {vendor_name} team,</p>
-    <p>You have been awarded work for PR {pr_no}. Summary below:</p>
-    {html_table}
-    <p>Best Regards,<br>Procurement Automation System</p>
-    """
+    new_mail.HTMLBody = f"<html><body><p>Hi {vendor_name} team,</p><p>Summary below:</p>{html_table}</body></html>"
+    
     new_mail.Display()
     print("Draft generated successfully.")
 except Exception as e:
-    print(f"Outlook MAPI Error: {e}")
-    input("Press Enter to review error before CMD closes...")
+    print(f"Outlook Error: {e}")
+    input("Press Enter to exit...")
 
 sys.exit(0)
