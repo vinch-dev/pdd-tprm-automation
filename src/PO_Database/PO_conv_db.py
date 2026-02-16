@@ -64,14 +64,14 @@ if final_batch_df is not None:
 
     try:
         # Check for existing records based on unique origin metadata
-        existing_sources = conn.sql(f"SELECT DISTINCT origin_metadata FROM {target_table}").pl()
+        existing_sources = conn.sql("SELECT DISTINCT origin_metadata FROM historical_transaction_logs").pl()
         
         # ANTI-JOIN LOGIC: Only select data from files that do not exist in the database
         delta_payload = final_batch_df.join(existing_sources, on=['origin_metadata'], how='anti')
         
         if delta_payload.height > 0:
             print(f"Delta-Load Initiated: Syncing {delta_payload.height} new records...")
-            conn.sql(f"INSERT INTO {target_table} SELECT * FROM delta_payload")
+            conn.sql("INSERT INTO historical_transaction_logs SELECT * FROM delta_payload")
             print("Database synchronization successful.")
         else:
             print("Synchronization Bypassed: All files already exist in archive.")
@@ -79,7 +79,7 @@ if final_batch_df is not None:
     except duckdb.CatalogException:
         # Repository Initialization: Create table if it does not exist
         print(f"Repository Initialization: Creating {target_table}...")
-        conn.sql(f"CREATE TABLE {target_table} AS SELECT * FROM final_batch_df")
+        conn.sql("CREATE TABLE historical_transaction_logs AS SELECT * FROM final_batch_df")
         print("Master table successfully initialized.")
 
     finally:
