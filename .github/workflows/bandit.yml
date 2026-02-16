@@ -26,7 +26,7 @@ jobs:
         # 2. -v     -> Verbose (show more detail)
         # 3. -ll    -> Show Medium and High severity only
         # 4. --exit-zero -> Do NOT turn red, just show us what's wrong
-        run: bandit -r . -v -ll --exit-zero
+        run: bandit -r . -v -l --exit-zero
 
       # We can still keep this, but now it will actually run
       - name: Upload Bandit report
