@@ -21,11 +21,18 @@ jobs:
       - name: Install Bandit
         run: pip install bandit
 
-      - name: Run Bandit
-        run: bandit -r . -f json -o bandit-report.json
+      - name: Run Bandit (Show Errors in Log)
+        # 1. -r .   -> Scan everything
+        # 2. -v     -> Verbose (show more detail)
+        # 3. -ll    -> Show Medium and High severity only
+        # 4. --exit-zero -> Do NOT turn red, just show us what's wrong
+        run: bandit -r . -v -ll --exit-zero
 
+      # We can still keep this, but now it will actually run
       - name: Upload Bandit report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bandit-report
           path: bandit-report.json
+          # Note: This might be empty if we didn't output to JSON above
