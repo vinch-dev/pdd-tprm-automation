@@ -20,7 +20,7 @@ graph TD
         E -->|No| H(Pricing Logic Check)
     end
     subgraph "Compliance & Output"
-        H --> I{Tariff, Historical PO Rate Available?}
+        H --> I{Tariff, Prev PO Available?}
         I -->|Yes| J[Apply Price]
         I -->|No| K[Flag for Manual Review]
         J --> L[Final Excel Review]
